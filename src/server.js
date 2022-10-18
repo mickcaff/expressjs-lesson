@@ -1,16 +1,16 @@
-const express = require("express");
+const express = require('express');
 const app = express();
-const cors = require("cors");
-const helmet = require("helmet");
+const cors = require('cors');
+const helmet = require('helmet');
 
 // Set values for the server's address
 const PORT = process.env.PORT || 0;
-const HOST = "0.0.0.0";
+const HOST = '0.0.0.0';
 
 // Cool trick for when promises or other complex callstack things are crashing & breaking:
-void process.on("unhandledRejection", (reason, p) => {
-  console.log(`Things got pretty major here! Big error:\n` + p);
-  console.log(`That error happened because of:\n` + reason);
+void process.on('unhandledRejection', (reason, p) => {
+	console.log(`Things got pretty major here! Big error:\n`+ p);
+	console.log(`That error happened because of:\n` + reason);
 });
 
 // Configure server security, based on documentation outlined here:
@@ -20,53 +20,93 @@ void process.on("unhandledRejection", (reason, p) => {
 app.use(helmet());
 app.use(helmet.permittedCrossDomainPolicies());
 app.use(helmet.referrerPolicy());
-app.use(
-  helmet.contentSecurityPolicy({
-    directives: {
-      defaultSrc: ["'self'"],
-    },
-  })
-);
+app.use(helmet.contentSecurityPolicy({
+	directives:{
+		defaultSrc:["'self'"]
+	}
+}));
 
 // Configure API data receiving & sending
 // Assume we always receive and send JSON
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({extended:true}));
 
 // Configure CORS, add domains to the origin array as needed.
 // This is basically where you need to know what your ReactJS app is hosted on.
-// eg. React app at localhost:3000 and deployedApp.com can communicate to this API,
-// but a React app at localhost:3001 or SomeRandomWebsite.com can NOT communicate to this API.
+// eg. React app at localhost:3000 and deployedApp.com can communicate to this API, 
+// but a React app at localhost:3001 or SomeRandomWebsite.com can NOT communicate to this API. 
 var corsOptions = {
-  origin: ["http://localhost:3000", "https://deployedApp.com"],
-  optionsSuccessStatus: 200,
-};
+	origin: ["http://localhost:3000", "https://deployedApp.com"],
+	optionsSuccessStatus: 200
+}
 app.use(cors(corsOptions));
 
-//------------------------------
-//Config above
-//Routes below
+require('dotenv').config();
 
-// Actual server behaviour
-app.get("/", (req, res) => {
-  console.log("ExpressJS API homepage received a request.");
+// console.log("Firebase project ID is: " + process.env.FIREBASE_ADMIN_PROJECT_ID)
 
-  const target = process.env.NODE_ENV || "not yet set";
-  res.json({
-    message: `Hello ${target} world!, woohoo!`,
-  });
+const firebaseAdmin = require('firebase-admin');
+firebaseAdmin.initializeApp({
+    credential: firebaseAdmin.credential.cert({
+        "projectId": process.env.FIREBASE_ADMIN_PROJECT_ID,
+        "privateKey": process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        "clientEmail":process.env.FIREBASE_ADMIN_CLIENT_EMAIL
+    })
 });
 
-const importedBlogRouting = require("./Blogs/BlogsRoutes");
-app.use("/blogs", importedBlogRouting);
+const {databaseConnector} = require('./database');
+
+if (process.env.NODE_ENV != "test") {
+    const DATABASE_URI = process.env.DATABASE_URI || "mongodb://localhost:27017/ExpressLessonOctLocal";
+    databaseConnector(DATABASE_URI).then(() => {
+        // if database connection succeeded, log a nice success message 
+        console.log("Database connected, woohoo!");
+    }).catch(error => {
+        // if database connection failed, log the error
+        console.log(`
+        Some error occured, it was: 
+        ${error}
+        `)
+    });
+} 
+
+// else {
+//     // only reaches here if env is test
+//     const DATABASE_URI = "mongodb://localhost:27017/ExpressLessonTest"
+// }
+
+
+// ------------------------------------------ 
+// Config above
+// Routes below
+
+// Actual server behaviour
+app.get('/', (req, res) => {
+	console.log('ExpressJS API homepage received a request.');
+  
+	const target = process.env.NODE_ENV || 'not yet set';
+
+
+	res.json({
+        'message':`Hello ${target} world, woohoo!!`
+    });
+
+});
+
+
+const importedBlogRouting = require('./Blogs/BlogsRoutes');
+app.use('/blogs', importedBlogRouting);
+//  localhost:55000/blogs/12314
+
+const importedUserRouting = require('./Users/UserRoutes');
+app.use('/users', importedUserRouting);
+
 
 // Notice that we're not calling app.listen() anywhere in here.
 // This file contains just the setup/config of the server,
 // so that the server can be used more-simply for things like Jest testing.
-// Because everything is bundled into app,
+// Because everything is bundled into app, 
 // we can export that and a few other important variables.
 module.exports = {
-  app,
-  PORT,
-  HOST,
-};
+	app, PORT, HOST
+}
